@@ -172,6 +172,56 @@
     .grid-wrap { grid-template-columns: 1fr; }
     .cell { width: 42px; height: 42px; }
   }
+
+  .dual-boards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  .mini-board-panel {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(148,163,184,0.16);
+    border-radius: 12px;
+    padding: 10px;
+  }
+  .cross-grid {
+    display: grid;
+    gap: 6px;
+    justify-content: start;
+  }
+  .cross-cell {
+    width: 48px;
+    height: 48px;
+    font-weight: 700;
+    font-size: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--cell-border);
+    background: var(--cell-off);
+    color: white;
+    cursor: pointer;
+  }
+  .cross-cell.on {
+    background: #ffd866;
+    color: #222;
+  }
+  .cross-cell.preview {
+    background: #5c7cfa;
+    color: white;
+  }
+  .cross-cell.preview.on {
+    background: #ff9d00;
+    color: #222;
+  }
+  .cross-cell.center {
+    background: #ff6188 !important;
+    color: white !important;
+  }
+  .section-title {
+    margin: 18px 0 10px;
+    font-size: 22px;
+  }
+
 </style>
 </head>
 <body>
@@ -250,6 +300,62 @@
           <button id="loadExampleBtn">載入 3D 範例</button>
         </div>
       </details>
+    </div>
+  </div>
+
+  <h2 class="section-title">Cross Flip Puzzle</h2>
+  <div class="sub">點左側任一格，該格所在整行與整列都會翻轉。目標是讓左側盤面變成右側目標圖案。</div>
+
+  <div class="panel">
+    <div class="row">
+      <label>棋盤大小
+        <select id="cfSize">
+          <option value="3">3 x 3</option>
+          <option value="4">4 x 4</option>
+          <option value="5" selected>5 x 5</option>
+          <option value="6">6 x 6</option>
+          <option value="7">7 x 7</option>
+        </select>
+      </label>
+      <button class="btn-accent" id="cfNewBtn">新遊戲</button>
+      <button id="cfResetBtn">重設</button>
+      <button id="cfRandomStartBtn">只重抽起始盤</button>
+      <button class="btn-good" id="cfSolveBtn">求解</button>
+      <button id="cfHintBtn">提示一步</button>
+      <button id="cfApplyBtn">套用解</button>
+      <button class="btn-warn" id="cfRankBtn">檢查完整排列</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">規則</div><div class="v">點一格會翻轉該格所在整行 + 整列，交點只翻一次</div></div>
+      <div class="stat"><div class="k">步數</div><div class="v" id="cfMoves">0</div></div>
+      <div class="stat"><div class="k">目前狀態</div><div class="v" id="cfStatus">尚未開始</div></div>
+      <div class="stat"><div class="k">完整排列</div><div class="v" id="cfRankText">尚未檢查</div></div>
+    </div>
+  </div>
+
+  <div class="grid-wrap" style="margin-top:14px;">
+    <div class="panel board-area">
+      <div class="row">
+        <span class="badge">左邊可點擊</span>
+        <span class="badge">滑鼠移上去可預覽影響的行與列</span>
+        <span class="badge">右邊為目標圖案</span>
+      </div>
+      <div class="dual-boards">
+        <div class="mini-board-panel">
+          <div class="layer-title">你的棋盤</div>
+          <div id="cfBoard"></div>
+        </div>
+        <div class="mini-board-panel">
+          <div class="layer-title">目標圖案</div>
+          <div id="cfTarget"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="font-weight:700; margin-bottom:8px;">Cross Flip 輸出</div>
+      <textarea id="cfLog" class="log" readonly></textarea>
     </div>
   </div>
 </div>
@@ -1219,6 +1325,343 @@
 
   createNewGame();
 })();
+
+
+(() => {
+  const state = {
+    n: 5,
+    board: [],
+    startBoard: [],
+    targetBoard: [],
+    moves: 0,
+    hoverRow: -1,
+    hoverCol: -1,
+    lastSolution: null,
+  };
+
+  const el = {
+    size: document.getElementById('cfSize'),
+    newBtn: document.getElementById('cfNewBtn'),
+    resetBtn: document.getElementById('cfResetBtn'),
+    randomStartBtn: document.getElementById('cfRandomStartBtn'),
+    solveBtn: document.getElementById('cfSolveBtn'),
+    hintBtn: document.getElementById('cfHintBtn'),
+    applyBtn: document.getElementById('cfApplyBtn'),
+    rankBtn: document.getElementById('cfRankBtn'),
+    board: document.getElementById('cfBoard'),
+    target: document.getElementById('cfTarget'),
+    moves: document.getElementById('cfMoves'),
+    status: document.getElementById('cfStatus'),
+    rankText: document.getElementById('cfRankText'),
+    log: document.getElementById('cfLog'),
+  };
+
+  function log(msg) {
+    const stamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+    el.log.value = `[${stamp}] ${msg}
+
+` + el.log.value;
+  }
+
+  function makeBoard(n, fill=0) {
+    return Array.from({length:n}, ()=>Array(n).fill(fill));
+  }
+
+  function copyBoard(b) {
+    return b.map(row=>row.slice());
+  }
+
+  function applyMoveToBoard(board, row, col) {
+    for (let c = 0; c < state.n; c++) board[row][c] ^= 1;
+    for (let r = 0; r < state.n; r++) if (r !== row) board[r][col] ^= 1;
+  }
+
+  function randomizeBoard(board, steps) {
+    for (let i = 0; i < steps; i++) {
+      const r = Math.floor(Math.random() * state.n);
+      const c = Math.floor(Math.random() * state.n);
+      applyMoveToBoard(board, r, c);
+    }
+  }
+
+  function newGame() {
+    state.n = Number(el.size.value);
+    state.moves = 0;
+    state.hoverRow = -1;
+    state.hoverCol = -1;
+    state.lastSolution = null;
+    state.targetBoard = makeBoard(state.n, 0);
+    randomizeBoard(state.targetBoard, Math.max(state.n + 2, state.n * 2));
+    state.board = copyBoard(state.targetBoard);
+    randomizeBoard(state.board, Math.max(state.n, state.n * 2));
+    state.startBoard = copyBoard(state.board);
+    updateAll(true);
+    log(`Cross Flip 新遊戲：${state.n}x${state.n}`);
+  }
+
+  function rerollStart() {
+    state.board = copyBoard(state.targetBoard);
+    randomizeBoard(state.board, Math.max(state.n, state.n * 2 + 1));
+    state.startBoard = copyBoard(state.board);
+    state.moves = 0;
+    state.hoverRow = -1;
+    state.hoverCol = -1;
+    state.lastSolution = null;
+    updateAll();
+    log('已重抽起始盤面，目標圖案不變');
+  }
+
+  function resetBoard() {
+    state.board = copyBoard(state.startBoard);
+    state.moves = 0;
+    state.hoverRow = -1;
+    state.hoverCol = -1;
+    state.lastSolution = null;
+    updateAll();
+    log('已重設回起始盤面');
+  }
+
+  function isWin() {
+    for (let r = 0; r < state.n; r++) for (let c = 0; c < state.n; c++) if (state.board[r][c] !== state.targetBoard[r][c]) return false;
+    return true;
+  }
+
+  function updateStatus() {
+    el.moves.textContent = String(state.moves);
+    el.status.innerHTML = isWin() ? '<span class="ok">已完成</span>' : '尚未完成';
+  }
+
+  function ensureBoardGrid(which) {
+    const root = which === 'board' ? el.board : el.target;
+    const key = which === 'board' ? '_boardGridBuilt' : '_targetGridBuilt';
+    if (state[key]) return;
+
+    root.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'cross-grid';
+    grid.style.gridTemplateColumns = `repeat(${state.n}, 48px)`;
+
+    for (let r = 0; r < state.n; r++) {
+      for (let c = 0; c < state.n; c++) {
+        const btn = document.createElement('button');
+        btn.className = 'cross-cell';
+        btn.dataset.row = String(r);
+        btn.dataset.col = String(c);
+
+        if (which === 'board') {
+          btn.addEventListener('mouseenter', () => {
+            state.hoverRow = r;
+            state.hoverCol = c;
+            refreshBoardCells();
+          });
+          btn.addEventListener('mouseleave', () => {
+            state.hoverRow = -1;
+            state.hoverCol = -1;
+            refreshBoardCells();
+          });
+          btn.addEventListener('click', () => {
+            applyMoveToBoard(state.board, r, c);
+            state.moves++;
+            state.lastSolution = null;
+            updateAll();
+            if (isWin()) log(`Cross Flip 過關，步數：${state.moves}`);
+          });
+        } else {
+          btn.disabled = true;
+        }
+
+        grid.appendChild(btn);
+      }
+    }
+
+    root.appendChild(grid);
+    state[key] = true;
+  }
+
+  function refreshBoardCells() {
+    ensureBoardGrid('board');
+    const buttons = el.board.querySelectorAll('.cross-cell');
+    buttons.forEach(btn => {
+      const r = Number(btn.dataset.row);
+      const c = Number(btn.dataset.col);
+      const value = state.board[r][c];
+      const affected = r === state.hoverRow || c === state.hoverCol;
+      const center = r === state.hoverRow && c === state.hoverCol;
+      btn.className = 'cross-cell' + (value ? ' on' : '');
+      if (affected) btn.classList.add('preview');
+      if (center) btn.classList.add('center');
+      btn.textContent = value ? '■' : '□';
+    });
+  }
+
+  function refreshTargetCells() {
+    ensureBoardGrid('target');
+    const buttons = el.target.querySelectorAll('.cross-cell');
+    buttons.forEach(btn => {
+      const r = Number(btn.dataset.row);
+      const c = Number(btn.dataset.col);
+      const value = state.targetBoard[r][c];
+      btn.className = 'cross-cell' + (value ? ' on' : '');
+      btn.textContent = value ? '■' : '□';
+    });
+  }
+
+  function rebuildBoards() {
+    state._boardGridBuilt = false;
+    state._targetGridBuilt = false;
+    ensureBoardGrid('board');
+    ensureBoardGrid('target');
+  }
+
+  function updateAll(rebuild=false) {
+    if (rebuild) rebuildBoards();
+    updateStatus();
+    refreshBoardCells();
+    refreshTargetCells();
+  }
+
+  function diffVector() {
+    const out = [];
+    for (let r = 0; r < state.n; r++) for (let c = 0; c < state.n; c++) out.push(state.board[r][c] ^ state.targetBoard[r][c]);
+    return out;
+  }
+
+  function buildMoveMatrix() {
+    const n2 = state.n * state.n;
+    const cols = [];
+    for (let mr = 0; mr < state.n; mr++) {
+      for (let mc = 0; mc < state.n; mc++) {
+        const col = Array(n2).fill(0);
+        for (let c = 0; c < state.n; c++) col[mr * state.n + c] ^= 1;
+        for (let r = 0; r < state.n; r++) if (r !== mr) col[r * state.n + mc] ^= 1;
+        cols.push(col);
+      }
+    }
+    return cols;
+  }
+
+  function solveGF2(Acols, b) {
+    const rows = b.length;
+    const cols = Acols.length;
+    const mat = [];
+    for (let r = 0; r < rows; r++) {
+      const row = [];
+      for (let c = 0; c < cols; c++) row.push(Acols[c][r]);
+      row.push(b[r]);
+      mat.push(row);
+    }
+    const pivotCols = [];
+    let row = 0;
+    for (let col = 0; col < cols && row < rows; col++) {
+      let pivot = -1;
+      for (let r = row; r < rows; r++) if (mat[r][col] === 1) { pivot = r; break; }
+      if (pivot === -1) continue;
+      [mat[row], mat[pivot]] = [mat[pivot], mat[row]];
+      pivotCols.push(col);
+      for (let r = 0; r < rows; r++) {
+        if (r !== row && mat[r][col] === 1) {
+          for (let cc = col; cc <= cols; cc++) mat[r][cc] ^= mat[row][cc];
+        }
+      }
+      row++;
+    }
+    for (let r = 0; r < rows; r++) {
+      let allZero = true;
+      for (let c = 0; c < cols; c++) if (mat[r][c] !== 0) { allZero = false; break; }
+      if (allZero && mat[r][cols] !== 0) return null;
+    }
+    const x = Array(cols).fill(0);
+    for (let r = 0; r < pivotCols.length; r++) x[pivotCols[r]] = mat[r][cols];
+    return { x, rank: pivotCols.length };
+  }
+
+  function getSolution() {
+    if (isWin()) return { moves: [], rank: null, text: '目前已經完成。' };
+    const A = buildMoveMatrix();
+    const solved = solveGF2(A, diffVector());
+    if (!solved) return null;
+    const moves = [];
+    for (let i = 0; i < solved.x.length; i++) {
+      if (solved.x[i]) moves.push([Math.floor(i / state.n), i % state.n]);
+    }
+    return {
+      moves,
+      rank: solved.rank,
+      text: `找到一組解，共 ${moves.length} 步${state.n <= 4 ? '。小盤面可再用 BFS 做最優化；目前這裡先套用線性解。' : '。'}`,
+    };
+  }
+
+  function solveCurrent() {
+    const result = getSolution();
+    if (!result) {
+      log('此盤面無解。');
+      return;
+    }
+    state.lastSolution = result.moves.slice();
+    log(result.text + (result.rank != null ? `
+rank = ${result.rank} / ${state.n * state.n}` : ''));
+  }
+
+  function applyHint() {
+    if (!state.lastSolution || !state.lastSolution.length) {
+      const result = getSolution();
+      if (!result || !result.moves.length) {
+        log(result ? result.text : '目前找不到提示。');
+        return;
+      }
+      state.lastSolution = result.moves.slice();
+    }
+    const [r, c] = state.lastSolution.shift();
+    applyMoveToBoard(state.board, r, c);
+    state.moves++;
+    updateAll();
+    log(`提示一步：第 ${r + 1} 行，第 ${c + 1} 列`);
+  }
+
+  function applyAllSolution() {
+    if (!state.lastSolution || !state.lastSolution.length) {
+      const result = getSolution();
+      if (!result) {
+        log('目前無可套用解。');
+        return;
+      }
+      state.lastSolution = result.moves.slice();
+    }
+    for (const [r, c] of state.lastSolution) {
+      applyMoveToBoard(state.board, r, c);
+      state.moves++;
+    }
+    state.lastSolution = [];
+    updateAll();
+    log(isWin() ? '已自動套用解並完成。' : '已套用目前解。');
+  }
+
+  function checkRank() {
+    const A = buildMoveMatrix();
+    const zeros = Array(state.n * state.n).fill(0);
+    const solved = solveGF2(A, zeros);
+    const rank = solved ? solved.rank : 0;
+    const full = rank === state.n * state.n;
+    el.rankText.innerHTML = full
+      ? `<span class="ok">是</span>（rank ${rank}/${state.n * state.n}）`
+      : `<span class="warn">否</span>（rank ${rank}/${state.n * state.n}）`;
+    log(full
+      ? `Cross Flip ${state.n}x${state.n} 具有完整排列。`
+      : `Cross Flip ${state.n}x${state.n} 不具有完整排列。rank = ${rank}/${state.n * state.n}`);
+  }
+
+  el.newBtn.onclick = newGame;
+  el.resetBtn.onclick = resetBoard;
+  el.randomStartBtn.onclick = rerollStart;
+  el.solveBtn.onclick = solveCurrent;
+  el.hintBtn.onclick = applyHint;
+  el.applyBtn.onclick = applyAllSolution;
+  el.rankBtn.onclick = checkRank;
+  el.size.onchange = newGame;
+
+  newGame();
+})();
+
 </script>
 </body>
 </html>
