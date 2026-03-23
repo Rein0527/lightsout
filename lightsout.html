@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lights Out 2D/3D Web 版</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #111827;
+    --panel-2: #1f2937;
+    --text: #e5e7eb;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --good: #22c55e;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+    --cell-off: #334155;
+    --cell-on: #22c55e;
+    --cell-target: #0ea5e9;
+    --cell-border: #64748b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: linear-gradient(180deg, #0b1020, #111827 35%, #0f172a);
+    color: var(--text);
+    font-family: "Segoe UI", "Noto Sans TC", Arial, sans-serif;
+  }
+  .app {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  h1 {
+    margin: 0 0 10px;
+    font-size: 28px;
+  }
+  .sub {
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .panel {
+    background: rgba(17, 24, 39, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  label {
+    color: var(--muted);
+    font-size: 14px;
+  }
+  input, select, textarea, button {
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  button {
+    cursor: pointer;
+    transition: transform .05s ease, background .2s ease, border-color .2s ease;
+  }
+  button:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  .btn-accent { background: rgba(14, 165, 233, 0.18); }
+  .btn-good { background: rgba(34, 197, 94, 0.15); }
+  .btn-warn { background: rgba(245, 158, 11, 0.15); }
+  .btn-bad { background: rgba(239, 68, 68, 0.12); }
+  .grid-wrap {
+    display: grid;
+    grid-template-columns: minmax(360px, 1.2fr) minmax(320px, .8fr);
+    gap: 14px;
+    align-items: start;
+  }
+  .board-area {
+    overflow-x: auto;
+    min-height: 300px;
+  }
+  .layers {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .layer {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(148,163,184,0.16);
+    border-radius: 12px;
+    padding: 10px;
+  }
+  .layer-title {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .board-grid {
+    display: grid;
+    gap: 6px;
+  }
+  .cell {
+    width: 48px;
+    height: 48px;
+    font-weight: 700;
+    font-size: 16px;
+    border: 1px solid var(--cell-border);
+    background: var(--cell-off);
+    color: white;
+  }
+  .cell.target {
+    outline: 2px solid rgba(14, 165, 233, 0.75);
+  }
+  .cell.nonzero {
+    background: var(--cell-on);
+    color: #04110a;
+  }
+  .cell.target.nonzero {
+    color: #04110a;
+  }
+  .badge {
+    display: inline-block;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.04);
+    color: var(--muted);
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .stat {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(148,163,184,0.16);
+    border-radius: 12px;
+    padding: 10px;
+  }
+  .stat .k { color: var(--muted); font-size: 12px; }
+  .stat .v { font-size: 16px; margin-top: 4px; word-break: break-word; }
+  .log {
+    width: 100%;
+    min-height: 330px;
+    resize: vertical;
+    line-height: 1.4;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .import-box {
+    width: 100%;
+    min-height: 130px;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--accent); }
+  .hint { color: var(--muted); font-size: 13px; }
+  .ok { color: var(--good); }
+  .warn { color: var(--warn); }
+  .bad { color: var(--bad); }
+  @media (max-width: 960px) {
+    .grid-wrap { grid-template-columns: 1fr; }
+    .cell { width: 42px; height: 42px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Lights Out 2D / 3D Web 版</h1>
+  <div class="sub">支援 2D / 3D、求解器、完全可解檢查、有解密度、首層 L0 快速求解、匯入 / 匯出盤面。</div>
+
+  <div class="panel">
+    <div class="row">
+      <label>維度
+        <select id="dimension">
+          <option value="2">2D</option>
+          <option value="3">3D</option>
+        </select>
+      </label>
+      <label>N (邊長)
+        <input id="size" type="number" min="1" value="3" style="width:84px" />
+      </label>
+      <label>mod
+        <input id="modulus" type="number" min="2" value="2" style="width:84px" />
+      </label>
+      <label>目標值
+        <input id="targetValue" type="number" min="0" value="1" style="width:84px" />
+      </label>
+      <button class="btn-accent" id="newGameBtn">建立新遊戲</button>
+      <button id="randomSolvableBtn">隨機可解盤面</button>
+      <button id="randomAnyBtn">隨機任意盤面</button>
+      <button id="clearBtn">重設全 0</button>
+      <button id="fillTargetBtn">設為全目標</button>
+    </div>
+
+    <div class="row">
+      <button class="btn-good" id="solveBtn">求解</button>
+      <button id="applyBtn">套用解</button>
+      <button id="hintBtn">提示一步</button>
+      <button id="firstLayerBtn">快速求首層 L0</button>
+      <button class="btn-warn" id="fullCheckBtn">檢查是否完全可解</button>
+      <button class="btn-warn" id="densityBtn">計算有解密度</button>
+      <button id="analyzeBtn">進階分析</button>
+      <button id="exportBtn">匯出盤面文字</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">規則</div><div class="v" id="ruleText"></div></div>
+      <div class="stat"><div class="k">狀態</div><div class="v" id="statusText"></div></div>
+      <div class="stat"><div class="k">完全可解性</div><div class="v" id="fullText">尚未檢查</div></div>
+      <div class="stat"><div class="k">目前盤面可解性</div><div class="v" id="currentSolvableText">尚未檢查</div></div>
+      <div class="stat"><div class="k">有解密度</div><div class="v" id="densityText">尚未檢查</div></div>
+      <div class="stat"><div class="k">步數</div><div class="v" id="moveText">0</div></div>
+    </div>
+  </div>
+
+  <div class="grid-wrap" style="margin-top:14px;">
+    <div class="panel board-area">
+      <div class="row">
+        <span class="badge">點格子就套用移動</span>
+        <span class="badge">非零綠色</span>
+        <span class="badge">目標值藍框</span>
+      </div>
+      <div id="board"></div>
+    </div>
+
+    <div class="panel">
+      <div style="font-weight:700; margin-bottom:8px;">輸出 / 匯入</div>
+      <textarea id="log" class="log" readonly></textarea>
+      <details>
+        <summary>盤面匯入</summary>
+        <div class="hint" style="margin:8px 0;">
+          2D 可貼：<code>101 / 010 / 111</code> 或每行一列。<br>
+          3D 可貼：<code>L0</code>、<code>L1</code>、<code>L2</code> 分層，或直接連續每層 N 行。<br>
+          大於 9 的值請用空白分隔，例如：<code>10 0 3</code>
+        </div>
+        <textarea id="importBox" class="import-box"></textarea>
+        <div class="row" style="margin-top:8px;">
+          <button id="importBtn">匯入到目前棋盤</button>
+          <button id="loadExampleBtn">載入 3D 範例</button>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const state = {
+    dimension: 2,
+    n: 3,
+    mod: 2,
+    target: 1,
+    board: [],
+    moveCount: 0,
+    lastSolutionCounts: null,
+    lastSolutionSequence: null,
+    lastSolutionText: '',
+    lastFirstLayerText: '',
+  };
+
+  const el = {
+    dimension: document.getElementById('dimension'),
+    size: document.getElementById('size'),
+    modulus: document.getElementById('modulus'),
+    targetValue: document.getElementById('targetValue'),
+    board: document.getElementById('board'),
+    ruleText: document.getElementById('ruleText'),
+    statusText: document.getElementById('statusText'),
+    fullText: document.getElementById('fullText'),
+    currentSolvableText: document.getElementById('currentSolvableText'),
+    densityText: document.getElementById('densityText'),
+    moveText: document.getElementById('moveText'),
+    log: document.getElementById('log'),
+    importBox: document.getElementById('importBox'),
+  };
+
+  function log(msg) {
+    const stamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+    el.log.value = `[${stamp}] ${msg}\n\n` + el.log.value;
+  }
+
+  function resetAnalysisFlags() {
+    state.lastSolutionCounts = null;
+    state.lastSolutionSequence = null;
+    state.lastSolutionText = '';
+    state.lastFirstLayerText = '';
+    el.currentSolvableText.textContent = '尚未檢查';
+  }
+
+  function modNorm(x, m) {
+    return ((x % m) + m) % m;
+  }
+
+  function isPrime(n) {
+    n = Number(n);
+    if (n <= 1) return false;
+    if (n <= 3) return true;
+    if (n % 2 === 0) return false;
+    for (let d = 3; d * d <= n; d += 2) {
+      if (n % d === 0) return false;
+    }
+    return true;
+  }
+
+  function gcdInt(a, b) {
+    a = Math.abs(a); b = Math.abs(b);
+    while (b !== 0) [a, b] = [b, a % b];
+    return a;
+  }
+
+  function egcd(a, b) {
+    if (b === 0) return [Math.abs(a), a >= 0 ? 1 : -1, 0];
+    const [g, x1, y1] = egcd(b, a % b);
+    return [g, y1, x1 - Math.floor(a / b) * y1];
+  }
+
+  function modInverseUnit(a, m) {
+    a = modNorm(a, m);
+    const [g, x] = egcd(a, m);
+    if (g !== 1) throw new Error(`${a} 在 mod ${m} 下不是可逆元`);
+    return modNorm(x, m);
+  }
+
+  function gcdBigInt(a, b) {
+    a = a < 0n ? -a : a;
+    b = b < 0n ? -b : b;
+    while (b !== 0n) [a, b] = [b, a % b];
+    return a;
+  }
+
+  function totalCells() {
+    return state.dimension === 2 ? state.n * state.n : state.n * state.n * state.n;
+  }
+
+  function createEmptyBoard() {
+    if (state.dimension === 2) {
+      return Array.from({ length: state.n }, () => Array(state.n).fill(0));
+    }
+    return Array.from({ length: state.n }, () =>
+      Array.from({ length: state.n }, () => Array(state.n).fill(0))
+    );
+  }
+
+  function createTargetBoard() {
+    if (state.dimension === 2) {
+      return Array.from({ length: state.n }, () => Array(state.n).fill(state.target));
+    }
+    return Array.from({ length: state.n }, () =>
+      Array.from({ length: state.n }, () => Array(state.n).fill(state.target))
+    );
+  }
+
+  function createRandomBoard() {
+    if (state.dimension === 2) {
+      return Array.from({ length: state.n }, () =>
+        Array.from({ length: state.n }, () => Math.floor(Math.random() * state.mod))
+      );
+    }
+    return Array.from({ length: state.n }, () =>
+      Array.from({ length: state.n }, () =>
+        Array.from({ length: state.n }, () => Math.floor(Math.random() * state.mod))
+      )
+    );
+  }
+
+  function getAllPositions() {
+    const out = [];
+    if (state.dimension === 2) {
+      for (let r = 0; r < state.n; r++) for (let c = 0; c < state.n; c++) out.push([r, c]);
+    } else {
+      for (let z = 0; z < state.n; z++) for (let r = 0; r < state.n; r++) for (let c = 0; c < state.n; c++) out.push([z, r, c]);
+    }
+    return out;
+  }
+
+  function cellIndex(...pos) {
+    if (state.dimension === 2) {
+      const [r, c] = pos;
+      return r * state.n + c;
+    }
+    const [z, r, c] = pos;
+    return z * state.n * state.n + r * state.n + c;
+  }
+
+  function indexToCell(idx) {
+    if (state.dimension === 2) {
+      return [Math.floor(idx / state.n), idx % state.n];
+    }
+    const layerSize = state.n * state.n;
+    const z = Math.floor(idx / layerSize);
+    const rem = idx % layerSize;
+    const r = Math.floor(rem / state.n);
+    const c = rem % state.n;
+    return [z, r, c];
+  }
+
+  function getAffectedPositions(...pos) {
+    const out = [];
+    if (state.dimension === 2) {
+      const [r, c] = pos;
+      const candidates = [[r,c],[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
+      for (const [rr, cc] of candidates) {
+        if (0 <= rr && rr < state.n && 0 <= cc && cc < state.n) out.push([rr,cc]);
+      }
+    } else {
+      const [z, r, c] = pos;
+      const candidates = [[z,r,c],[z,r-1,c],[z,r+1,c],[z,r,c-1],[z,r,c+1],[z-1,r,c],[z+1,r,c]];
+      for (const [zz, rr, cc] of candidates) {
+        if (0 <= zz && zz < state.n && 0 <= rr && rr < state.n && 0 <= cc && cc < state.n) out.push([zz,rr,cc]);
+      }
+    }
+    return out;
+  }
+
+  function cloneBoard(board) {
+    return JSON.parse(JSON.stringify(board));
+  }
+
+  function applyMoveOnBoard(board, ...pos) {
+    for (const p of getAffectedPositions(...pos)) {
+      if (state.dimension === 2) {
+        const [r, c] = p;
+        board[r][c] = modNorm(board[r][c] + 1, state.mod);
+      } else {
+        const [z, r, c] = p;
+        board[z][r][c] = modNorm(board[z][r][c] + 1, state.mod);
+      }
+    }
+  }
+
+  function applyMove(...pos) {
+    applyMoveOnBoard(state.board, ...pos);
+  }
+
+  function flattenBoard(board = state.board) {
+    if (state.dimension === 2) {
+      return board.flat();
+    }
+    const arr = [];
+    for (let z = 0; z < state.n; z++) for (let r = 0; r < state.n; r++) for (let c = 0; c < state.n; c++) arr.push(board[z][r][c]);
+    return arr;
+  }
+
+  function unflattenVector(vec, dim = state.dimension) {
+    if (dim === 2) {
+      const out = [];
+      for (let r = 0; r < state.n; r++) out.push(vec.slice(r * state.n, (r + 1) * state.n));
+      return out;
+    }
+    let idx = 0;
+    const out = [];
+    for (let z = 0; z < state.n; z++) {
+      const layer = [];
+      for (let r = 0; r < state.n; r++) {
+        const row = [];
+        for (let c = 0; c < state.n; c++) row.push(vec[idx++]);
+        layer.push(row);
+      }
+      out.push(layer);
+    }
+    return out;
+  }
+
+  function isSolved(board = state.board) {
+    const arr = flattenBoard(board);
+    return arr.every(v => v === state.target);
+  }
+
+  function currentTargetDelta() {
+    const cur = flattenBoard();
+    return cur.map(v => modNorm(state.target - v, state.mod));
+  }
+
+  function buildMoveMatrix(dim = state.dimension) {
+    const size = dim === 2 ? state.n * state.n : state.n * state.n * state.n;
+    const A = Array.from({ length: size }, () => Array(size).fill(0));
+    const positions = [];
+    if (dim === 2) {
+      for (let r = 0; r < state.n; r++) for (let c = 0; c < state.n; c++) positions.push([r,c]);
+    } else {
+      for (let z = 0; z < state.n; z++) for (let r = 0; r < state.n; r++) for (let c = 0; c < state.n; c++) positions.push([z,r,c]);
+    }
+    const savedDim = state.dimension;
+    state.dimension = dim;
+    for (const pos of positions) {
+      const col = cellIndex(...pos);
+      for (const aff of getAffectedPositions(...pos)) {
+        const row = cellIndex(...aff);
+        A[row][col] = modNorm(A[row][col] + 1, state.mod);
+      }
+    }
+    state.dimension = savedDim;
+    return A;
+  }
+
+  function matrixVectorMulMod(A, x, m) {
+    return A.map(row => row.reduce((acc, v, i) => modNorm(acc + v * x[i], m), 0));
+  }
+
+  function vectorAddMod(a, b, m) {
+    return a.map((v, i) => modNorm(v + b[i], m));
+  }
+
+  function vectorSubMod(a, b, m) {
+    return a.map((v, i) => modNorm(v - b[i], m));
+  }
+
+  function countsToSequence(counts) {
+    const seq = [];
+    for (let i = 0; i < counts.length; i++) {
+      for (let t = 0; t < counts[i]; t++) seq.push(indexToCell(i));
+    }
+    return seq;
+  }
+
+  function countsToText(counts) {
+    const data = unflattenVector(counts);
+    const lines = [];
+    if (state.dimension === 2) {
+      lines.push('每格按的次數：');
+      for (const row of data) lines.push(row.join(' '));
+    } else {
+      lines.push('每格按的次數（依 layer 顯示）：');
+      for (let z = 0; z < state.n; z++) {
+        lines.push(`L${z}`);
+        for (const row of data[z]) lines.push(row.join(' '));
+      }
+    }
+    lines.push(`總按次數：${counts.reduce((a,b)=>a+b,0)}`);
+    return lines.join('\n');
+  }
+
+  function boardToText(board = state.board) {
+    if (state.dimension === 2) {
+      return board.map(row => row.join('')).join('\n');
+    }
+    const lines = [];
+    for (let z = 0; z < state.n; z++) {
+      lines.push(`L${z}`);
+      for (let r = 0; r < state.n; r++) lines.push(board[z][r].join(''));
+    }
+    return lines.join('\n');
+  }
+
+  function parseRow(line, expectedN) {
+    const trimmed = line.trim();
+    if (!trimmed) return null;
+    if (trimmed.includes(' ')) {
+      const vals = trimmed.split(/\s+/).map(Number);
+      if (vals.some(v => !Number.isInteger(v))) throw new Error(`無法解析列：${line}`);
+      if (vals.length !== expectedN) throw new Error(`列長度不對：${line}`);
+      return vals;
+    }
+    const chars = [...trimmed].map(ch => Number(ch));
+    if (chars.some(v => !Number.isInteger(v))) throw new Error(`無法解析列：${line}`);
+    if (chars.length !== expectedN) throw new Error(`列長度不對：${line}`);
+    return chars;
+  }
+
+  function parseBoardText(raw) {
+    const lines = raw.replace(/\r/g, '').split('\n').map(s => s.trim()).filter(Boolean);
+    if (!lines.length) throw new Error('沒有可匯入內容');
+    if (state.dimension === 2) {
+      if (lines.length !== state.n) throw new Error(`2D 需要剛好 ${state.n} 行`);
+      return lines.map(line => parseRow(line, state.n).map(v => modNorm(v, state.mod)));
+    }
+    const layers = [];
+    let current = [];
+    let hasLabels = false;
+    for (const line of lines) {
+      if (/^L\d+$/i.test(line)) {
+        hasLabels = true;
+        if (current.length) {
+          layers.push(current);
+          current = [];
+        }
+        continue;
+      }
+      current.push(parseRow(line, state.n).map(v => modNorm(v, state.mod)));
+    }
+    if (current.length) layers.push(current);
+    if (hasLabels && layers.length !== state.n) throw new Error(`3D 需要 ${state.n} 層，目前只有 ${layers.length} 層`);
+    if (!hasLabels) {
+      if (layers.length !== 1 || layers[0].length !== state.n * state.n) throw new Error(`3D 無分層標記時，需連續提供 ${state.n * state.n} 行`);
+      const allRows = layers[0];
+      const out = [];
+      for (let z = 0; z < state.n; z++) out.push(allRows.slice(z * state.n, (z + 1) * state.n));
+      return out;
+    }
+    for (const layer of layers) {
+      if (layer.length !== state.n) throw new Error(`每層需要 ${state.n} 行`);
+    }
+    return layers;
+  }
+
+  function renderBoard() {
+    el.board.innerHTML = '';
+    if (state.dimension === 2) {
+      const layer = document.createElement('div');
+      layer.className = 'layer';
+      const title = document.createElement('div');
+      title.className = 'layer-title';
+      title.textContent = `2D ${state.n}×${state.n}`;
+      layer.appendChild(title);
+      const grid = document.createElement('div');
+      grid.className = 'board-grid';
+      grid.style.gridTemplateColumns = `repeat(${state.n}, 48px)`;
+      for (let r = 0; r < state.n; r++) {
+        for (let c = 0; c < state.n; c++) {
+          const value = state.board[r][c];
+          const btn = document.createElement('button');
+          btn.className = 'cell';
+          if (value !== 0) btn.classList.add('nonzero');
+          if (value === state.target) btn.classList.add('target');
+          btn.textContent = String(value);
+          btn.onclick = () => { applyMove(r, c); state.moveCount++; resetAnalysisFlags(); updateUI(); if (isSolved()) log(`已達成目標，步數：${state.moveCount}`); };
+          grid.appendChild(btn);
+        }
+      }
+      layer.appendChild(grid);
+      el.board.appendChild(layer);
+    } else {
+      const wrap = document.createElement('div');
+      wrap.className = 'layers';
+      for (let z = 0; z < state.n; z++) {
+        const layer = document.createElement('div');
+        layer.className = 'layer';
+        const title = document.createElement('div');
+        title.className = 'layer-title';
+        title.textContent = `L${z}`;
+        layer.appendChild(title);
+        const grid = document.createElement('div');
+        grid.className = 'board-grid';
+        grid.style.gridTemplateColumns = `repeat(${state.n}, 48px)`;
+        for (let r = 0; r < state.n; r++) {
+          for (let c = 0; c < state.n; c++) {
+            const value = state.board[z][r][c];
+            const btn = document.createElement('button');
+            btn.className = 'cell';
+            if (value !== 0) btn.classList.add('nonzero');
+            if (value === state.target) btn.classList.add('target');
+            btn.textContent = String(value);
+            btn.onclick = () => { applyMove(z, r, c); state.moveCount++; resetAnalysisFlags(); updateUI(); if (isSolved()) log(`已達成目標，步數：${state.moveCount}`); };
+            grid.appendChild(btn);
+          }
+        }
+        layer.appendChild(grid);
+        wrap.appendChild(layer);
+      }
+      el.board.appendChild(wrap);
+    }
+  }
+
+  function updateStatusTexts() {
+    el.ruleText.textContent = state.dimension === 2
+      ? `2D：自己 + 上下左右，全部 +1 (mod ${state.mod})`
+      : `3D：自己 + 上下左右 + 前後層，全部 +1 (mod ${state.mod})`;
+    el.statusText.innerHTML = `${isSolved() ? '<span class="ok">已達成目標</span>' : '尚未達成'}<br>${state.dimension}D，棋盤 ${state.dimension === 2 ? `${state.n}×${state.n}` : `${state.n}×${state.n}×${state.n}`}`;
+    el.moveText.textContent = String(state.moveCount);
+  }
+
+  function updateUI() {
+    updateStatusTexts();
+    renderBoard();
+  }
+
+  function syncInputsToState() {
+    const dimension = Number(el.dimension.value);
+    const n = Number(el.size.value);
+    const mod = Number(el.modulus.value);
+    const target = Number(el.targetValue.value);
+    if (![2,3].includes(dimension)) throw new Error('維度只能是 2 或 3');
+    if (!Number.isInteger(n) || n <= 0) throw new Error('N 必須是正整數');
+    if (!Number.isInteger(mod) || mod <= 1) throw new Error('mod 必須大於 1');
+    if (!Number.isInteger(target) || target < 0 || target >= mod) throw new Error(`目標值需介於 0 到 ${mod - 1}`);
+    state.dimension = dimension;
+    state.n = n;
+    state.mod = mod;
+    state.target = target;
+  }
+
+  function createNewGame() {
+    syncInputsToState();
+    state.board = createEmptyBoard();
+    state.moveCount = 0;
+    resetAnalysisFlags();
+    el.fullText.textContent = '尚未檢查';
+    el.densityText.textContent = '尚未檢查';
+    updateUI();
+    log(`建立新遊戲：${state.dimension}D, N=${state.n}, mod=${state.mod}, target=${state.target}`);
+  }
+
+  function shuffleSolvableBoard() {
+    state.board = createEmptyBoard();
+    const positions = getAllPositions();
+    const times = Math.max(10, totalCells() * 3);
+    for (let i = 0; i < times; i++) {
+      const pos = positions[Math.floor(Math.random() * positions.length)];
+      applyMoveOnBoard(state.board, ...pos);
+    }
+    state.moveCount = 0;
+    resetAnalysisFlags();
+    updateUI();
+    log(`已產生隨機可解盤面，隨機操作次數：${times}`);
+  }
+
+  function randomAnyBoard() {
+    state.board = createRandomBoard();
+    state.moveCount = 0;
+    resetAnalysisFlags();
+    updateUI();
+    log('已產生隨機任意盤面');
+  }
+
+  function clearBoard() {
+    state.board = createEmptyBoard();
+    state.moveCount = 0;
+    resetAnalysisFlags();
+    updateUI();
+    log('盤面已重設為全 0');
+  }
+
+  function fillTargetBoard() {
+    state.board = createTargetBoard();
+    state.moveCount = 0;
+    resetAnalysisFlags();
+    updateUI();
+    log(`盤面已設為全目標值 ${state.target}`);
+  }
+
+  function solvePrimeGaussian(A, b, p) {
+    const rows = A.length;
+    const cols = A[0]?.length || 0;
+    const aug = Array.from({ length: rows }, (_, r) => [...A[r].map(v => modNorm(v, p)), modNorm(b[r], p)]);
+    const pivotCols = [];
+    let row = 0;
+    for (let col = 0; col < cols && row < rows; col++) {
+      let pivot = -1;
+      for (let r = row; r < rows; r++) {
+        if (aug[r][col] !== 0) { pivot = r; break; }
+      }
+      if (pivot === -1) continue;
+      if (pivot !== row) [aug[row], aug[pivot]] = [aug[pivot], aug[row]];
+      const inv = modInverseUnit(aug[row][col], p);
+      for (let k = col; k <= cols; k++) aug[row][k] = modNorm(aug[row][k] * inv, p);
+      for (let r = 0; r < rows; r++) {
+        if (r !== row && aug[r][col] !== 0) {
+          const factor = aug[r][col];
+          for (let k = col; k <= cols; k++) aug[r][k] = modNorm(aug[r][k] - factor * aug[row][k], p);
+        }
+      }
+      pivotCols.push(col);
+      row++;
+    }
+    for (let r = 0; r < rows; r++) {
+      let allZero = true;
+      for (let c = 0; c < cols; c++) if (aug[r][c] !== 0) { allZero = false; break; }
+      if (allZero && aug[r][cols] !== 0) return null;
+    }
+    const x = Array(cols).fill(0);
+    for (let r = 0; r < pivotCols.length; r++) x[pivotCols[r]] = aug[r][cols];
+    return { x, rank: pivotCols.length };
+  }
+
+  function rankPrime(A, p) {
+    const rows = A.length;
+    const cols = A[0]?.length || 0;
+    const mat = A.map(row => row.map(v => modNorm(v, p)));
+    let rank = 0;
+    let row = 0;
+    for (let col = 0; col < cols && row < rows; col++) {
+      let pivot = -1;
+      for (let r = row; r < rows; r++) if (mat[r][col] !== 0) { pivot = r; break; }
+      if (pivot === -1) continue;
+      if (pivot !== row) [mat[row], mat[pivot]] = [mat[pivot], mat[row]];
+      const inv = modInverseUnit(mat[row][col], p);
+      for (let k = col; k < cols; k++) mat[row][k] = modNorm(mat[row][k] * inv, p);
+      for (let r = row + 1; r < rows; r++) {
+        if (mat[r][col] !== 0) {
+          const factor = mat[r][col];
+          for (let k = col; k < cols; k++) mat[r][k] = modNorm(mat[r][k] - factor * mat[row][k], p);
+        }
+      }
+      rank++;
+      row++;
+    }
+    return rank;
+  }
+
+  function solveModByUnitPivots(A, b, m) {
+    const n = A.length;
+    if (!n || A[0].length !== n) return null;
+    const aug = A.map((row, i) => [...row.map(v => modNorm(v, m)), modNorm(b[i], m)]);
+    const colPerm = Array.from({ length: n }, (_, i) => i);
+
+    for (let k = 0; k < n; k++) {
+      let pr = -1, pc = -1;
+      for (let r = k; r < n && pr === -1; r++) {
+        for (let c = k; c < n; c++) {
+          if (gcdInt(aug[r][c], m) === 1) { pr = r; pc = c; break; }
+        }
+      }
+      if (pr === -1) return null;
+      if (pr !== k) [aug[k], aug[pr]] = [aug[pr], aug[k]];
+      if (pc !== k) {
+        for (let r = 0; r < n; r++) [aug[r][k], aug[r][pc]] = [aug[r][pc], aug[r][k]];
+        [colPerm[k], colPerm[pc]] = [colPerm[pc], colPerm[k]];
+      }
+      const inv = modInverseUnit(aug[k][k], m);
+      for (let j = k; j <= n; j++) aug[k][j] = modNorm(aug[k][j] * inv, m);
+      for (let r = 0; r < n; r++) {
+        if (r === k) continue;
+        const factor = aug[r][k];
+        if (factor !== 0) {
+          for (let j = k; j <= n; j++) aug[r][j] = modNorm(aug[r][j] - factor * aug[k][j], m);
+        }
+      }
+    }
+    const xPerm = aug.map(row => modNorm(row[n], m));
+    const x = Array(n).fill(0);
+    for (let i = 0; i < n; i++) x[colPerm[i]] = xPerm[i];
+    return x;
+  }
+
+  function determinantBareissBigInt(A) {
+    const n = A.length;
+    if (!n) return 1n;
+    const M = A.map(row => row.map(v => BigInt(v)));
+    let sign = 1n;
+    let prevPivot = 1n;
+    for (let k = 0; k < n - 1; k++) {
+      let pivotRow = k;
+      while (pivotRow < n && M[pivotRow][k] === 0n) pivotRow++;
+      if (pivotRow === n) return 0n;
+      if (pivotRow !== k) {
+        [M[k], M[pivotRow]] = [M[pivotRow], M[k]];
+        sign = -sign;
+      }
+      const pivot = M[k][k];
+      for (let i = k + 1; i < n; i++) {
+        for (let j = k + 1; j < n; j++) {
+          M[i][j] = (M[i][j] * pivot - M[i][k] * M[k][j]) / prevPivot;
+        }
+      }
+      prevPivot = pivot;
+      for (let i = k + 1; i < n; i++) M[i][k] = 0n;
+      for (let j = k + 1; j < n; j++) M[k][j] = 0n;
+    }
+    return sign * M[n - 1][n - 1];
+  }
+
+  function solveViaBFS(maxStates = 50000) {
+    const totalStates = BigInt(state.mod) ** BigInt(totalCells());
+    if (totalStates > BigInt(maxStates)) return null;
+    const start = flattenBoard().join(',');
+    const goal = Array(totalCells()).fill(state.target).join(',');
+    if (start === goal) return { counts: Array(totalCells()).fill(0), sequence: [], text: '目前已經達成目標，不需要操作。' };
+
+    const moveEffects = getAllPositions().map(pos => {
+      const eff = Array(totalCells()).fill(0);
+      for (const aff of getAffectedPositions(...pos)) eff[cellIndex(...aff)] = modNorm(eff[cellIndex(...aff)] + 1, state.mod);
+      return eff;
+    });
+
+    const queue = [start];
+    let head = 0;
+    const parent = new Map([[start, null]]);
+    const moveUsed = new Map([[start, -1]]);
+
+    while (head < queue.length) {
+      const curKey = queue[head++];
+      const cur = curKey.split(',').map(Number);
+      for (let idx = 0; idx < moveEffects.length; idx++) {
+        const nxt = cur.map((v, i) => modNorm(v + moveEffects[idx][i], state.mod));
+        const key = nxt.join(',');
+        if (parent.has(key)) continue;
+        parent.set(key, curKey);
+        moveUsed.set(key, idx);
+        if (key === goal) {
+          const seqIdx = [];
+          let k = key;
+          while (parent.get(k) !== null) {
+            seqIdx.push(moveUsed.get(k));
+            k = parent.get(k);
+          }
+          seqIdx.reverse();
+          const counts = Array(totalCells()).fill(0);
+          const sequence = [];
+          for (const i of seqIdx) {
+            counts[i]++;
+            sequence.push(indexToCell(i));
+          }
+          return {
+            counts,
+            sequence,
+            text: `求解方式：BFS 最短路徑\n${countsToText(counts)}\n最短步數：${sequence.length}`
+          };
+        }
+        queue.push(key);
+      }
+    }
+    return null;
+  }
+
+  function solveFirstLayer3D(limit = 250000) {
+    if (state.dimension !== 3) return null;
+    const layerSize = state.n * state.n;
+    const totalFirstLayerStates = BigInt(state.mod) ** BigInt(layerSize);
+    if (totalFirstLayerStates > BigInt(limit)) return { tooLarge: true, totalFirstLayerStates };
+
+    const savedDim = state.dimension;
+    state.dimension = 2;
+    const A2 = buildMoveMatrix(2);
+    state.dimension = savedDim;
+
+    const deltas = [];
+    for (let z = 0; z < state.n; z++) {
+      const layer = [];
+      for (let r = 0; r < state.n; r++) for (let c = 0; c < state.n; c++) layer.push(modNorm(state.target - state.board[z][r][c], state.mod));
+      deltas.push(layer);
+    }
+
+    const digits = Array(layerSize).fill(0);
+    const zero = Array(layerSize).fill(0);
+
+    function layerVecText(vec) {
+      return unflattenVector(vec, 2).map(row => row.join(' ')).join('\n');
+    }
+
+    function nextDigits() {
+      for (let i = layerSize - 1; i >= 0; i--) {
+        digits[i]++;
+        if (digits[i] < state.mod) return true;
+        digits[i] = 0;
+      }
+      return false;
+    }
+
+    while (true) {
+      let xPrev = zero.slice();
+      let xCur = digits.slice();
+      const layers = [xCur.slice()];
+      for (let k = 0; k < state.n - 1; k++) {
+        const Ax = matrixVectorMulMod(A2, xCur, state.mod);
+        const xNext = deltas[k].map((d, i) => modNorm(d - xPrev[i] - Ax[i], state.mod));
+        layers.push(xNext);
+        xPrev = xCur;
+        xCur = xNext;
+      }
+      const lastResidual = deltas[state.n - 1].map((d, i) => modNorm(d - xPrev[i] - matrixVectorMulMod(A2, xCur, state.mod)[i], state.mod));
+      if (lastResidual.every(v => v === 0)) {
+        const counts = [];
+        for (const lv of layers) counts.push(...lv);
+        const sequence = countsToSequence(counts);
+        const parts = ['3D 首層快速求解成功', 'L0：', layerVecText(layers[0]), ''];
+        for (let z = 1; z < layers.length; z++) parts.push(`L${z}：`, layerVecText(layers[z]), '');
+        parts.push(`總按次數：${counts.reduce((a,b)=>a+b,0)}`);
+        return {
+          counts,
+          sequence,
+          firstLayer: layers[0],
+          layers,
+          text: parts.join('\n')
+        };
+      }
+      if (!nextDigits()) break;
+    }
+    return null;
+  }
+
+  function checkFullSolvability() {
+    const A = buildMoveMatrix();
+    const size = totalCells();
+    const det = determinantBareissBigInt(A);
+    const g = gcdBigInt(det, BigInt(state.mod));
+    const fullyByDet = (g === 1n);
+
+    let extra = '';
+    if (isPrime(state.mod)) {
+      const rank = rankPrime(A, state.mod);
+      extra = `\nrank(A) = ${rank} / ${size}\nkernel 維度 = ${size - rank}`;
+    }
+
+    const msg = `det(A) = ${det.toString()}\ngcd(det(A), mod) = ${g.toString()}\n\n結果：${fullyByDet ? '是，完全可解' : '否，不是完全可解'}${extra}`;
+    el.fullText.innerHTML = fullyByDet ? '<span class="ok">是</span>' : '<span class="bad">否</span>';
+    log(msg);
+  }
+
+  function computeDensity() {
+    const A = buildMoveMatrix();
+    const size = totalCells();
+    if (isPrime(state.mod)) {
+      const rank = rankPrime(A, state.mod);
+      const kernelDim = size - rank;
+      const text = `1 / ${state.mod}^${kernelDim}` + (kernelDim <= 8 ? ` = ${1 / (state.mod ** kernelDim)}` : '');
+      el.densityText.textContent = text;
+      log(`質數 mod 有解密度\nrank(A) = ${rank}\nkernel 維度 = ${kernelDim}\n有解密度 = ${text}`);
+      return;
+    }
+    const totalStates = BigInt(state.mod) ** BigInt(size);
+    if (totalStates > 200000n) {
+      el.densityText.innerHTML = '<span class="warn">盤面太大，未計算</span>';
+      log(`合成數 mod 的精確密度改用 BFS/枚舉。\n目前總狀態數 = ${totalStates.toString()}，超過上限 200000。`);
+      return;
+    }
+
+    const moveEffects = getAllPositions().map(pos => {
+      const eff = Array(size).fill(0);
+      for (const aff of getAffectedPositions(...pos)) eff[cellIndex(...aff)] = modNorm(eff[cellIndex(...aff)] + 1, state.mod);
+      return eff;
+    });
+    const zero = Array(size).fill(0).join(',');
+    const seen = new Set([zero]);
+    const queue = [zero];
+    let head = 0;
+    while (head < queue.length) {
+      const cur = queue[head++].split(',').map(Number);
+      for (const eff of moveEffects) {
+        const nxt = cur.map((v, i) => modNorm(v + eff[i], state.mod)).join(',');
+        if (!seen.has(nxt)) { seen.add(nxt); queue.push(nxt); }
+      }
+    }
+    el.densityText.textContent = `${seen.size} / ${totalStates.toString()} ≈ ${(seen.size / Number(totalStates) * 100).toFixed(6)}%`;
+    log(`合成數 mod 精確有解密度（BFS）\nreachable = ${seen.size}\ntotal = ${totalStates.toString()}\n密度 ≈ ${(seen.size / Number(totalStates) * 100).toFixed(6)}%`);
+  }
+
+  function analyzeBoard() {
+    const A = buildMoveMatrix();
+    const size = totalCells();
+    const det = determinantBareissBigInt(A);
+    const g = gcdBigInt(det, BigInt(state.mod));
+    const lines = [
+      `維度：${state.dimension}D`,
+      `棋盤：${state.dimension === 2 ? `${state.n}×${state.n}` : `${state.n}×${state.n}×${state.n}`}`,
+      `mod：${state.mod}`,
+      `目標值：${state.target}`,
+      `總格數：${size}`,
+      `det(A)：${det.toString()}`,
+      `gcd(det(A), mod)：${g.toString()}`,
+      `完全可解：${g === 1n ? '是' : '否'}`,
+    ];
+    if (isPrime(state.mod)) {
+      const rank = rankPrime(A, state.mod);
+      lines.push(`rank(A)：${rank}`);
+      lines.push(`kernel 維度：${size - rank}`);
+    }
+    lines.push('', '目前盤面：', boardToText());
+    log(lines.join('\n'));
+  }
+
+  function solveCurrentBoard() {
+    if (isSolved()) {
+      state.lastSolutionCounts = Array(totalCells()).fill(0);
+      state.lastSolutionSequence = [];
+      state.lastSolutionText = '目前已經達成目標，不需要操作。';
+      el.currentSolvableText.innerHTML = '<span class="ok">是</span>';
+      log(state.lastSolutionText);
+      return;
+    }
+
+    const A = buildMoveMatrix();
+    const b = currentTargetDelta();
+    let result = null;
+
+    if (isPrime(state.mod)) {
+      const solved = solvePrimeGaussian(A, b, state.mod);
+      if (solved) {
+        const counts = solved.x.map(v => modNorm(v, state.mod));
+        result = {
+          counts,
+          sequence: countsToSequence(counts),
+          text: `求解方式：GF(${state.mod}) 高斯消去\n${countsToText(counts)}`
+        };
+      }
+    } else {
+      const det = determinantBareissBigInt(A);
+      if (gcdBigInt(det, BigInt(state.mod)) === 1n) {
+        const x = solveModByUnitPivots(A, b, state.mod);
+        if (x) {
+          const counts = x.map(v => modNorm(v, state.mod));
+          result = {
+            counts,
+            sequence: countsToSequence(counts),
+            text: `求解方式：一般 mod 可逆矩陣消去\n${countsToText(counts)}`
+          };
+        }
+      }
+    }
+
+    if (!result && state.dimension === 3) {
+      const l0 = solveFirstLayer3D();
+      if (l0 && !l0.tooLarge) {
+        result = { counts: l0.counts, sequence: l0.sequence, text: `求解方式：3D 首層遞推\n${countsToText(l0.counts)}` };
+        state.lastFirstLayerText = l0.text;
+      }
+    }
+
+    if (!result) result = solveViaBFS();
+
+    if (!result) {
+      el.currentSolvableText.innerHTML = '<span class="bad">否 / 或目前方法未找到</span>';
+      log('求解失敗。可能原因：\n1. 盤面無解\n2. 合成數 mod 且矩陣不可逆\n3. 狀態空間過大，BFS 未啟用\n4. 3D 首層枚舉空間過大');
+      return;
+    }
+
+    state.lastSolutionCounts = result.counts;
+    state.lastSolutionSequence = result.sequence;
+    state.lastSolutionText = result.text;
+    el.currentSolvableText.innerHTML = '<span class="ok">是</span>';
+    log(result.text + (state.lastFirstLayerText ? '\n\n' + state.lastFirstLayerText : ''));
+  }
+
+  function applyLastSolution() {
+    if (!state.lastSolutionSequence) {
+      log('尚未有可套用的解，請先按「求解」');
+      return;
+    }
+    for (const pos of state.lastSolutionSequence) {
+      applyMove(...pos);
+      state.moveCount++;
+    }
+    resetAnalysisFlags();
+    updateUI();
+    log(`已套用完整解。${isSolved() ? '目前已達成目標。' : '盤面已變更。'}`);
+  }
+
+  function applyOneHint() {
+    if (!state.lastSolutionSequence || state.lastSolutionSequence.length === 0) {
+      log('沒有可用提示，請先按「求解」');
+      return;
+    }
+    const pos = state.lastSolutionSequence.shift();
+    applyMove(...pos);
+    state.moveCount++;
+    if (state.lastSolutionCounts) {
+      const idx = cellIndex(...pos);
+      if (state.lastSolutionCounts[idx] > 0) state.lastSolutionCounts[idx]--;
+    }
+    updateUI();
+    log(`已套用一步提示：(${pos.join(', ')})`);
+  }
+
+  function quickFirstLayer() {
+    if (state.dimension !== 3) {
+      log('快速求首層 L0 只適用於 3D');
+      return;
+    }
+    const result = solveFirstLayer3D();
+    if (result?.tooLarge) {
+      log(`首層空間為 ${result.totalFirstLayerStates.toString()}，超過枚舉上限，未計算。`);
+      return;
+    }
+    if (!result) {
+      log('首層求解失敗：此盤面無法由目前方法找出 L0');
+      return;
+    }
+    state.lastSolutionCounts = result.counts;
+    state.lastSolutionSequence = result.sequence;
+    state.lastSolutionText = result.text;
+    state.lastFirstLayerText = result.text;
+    el.currentSolvableText.innerHTML = '<span class="ok">是</span>';
+    log(result.text);
+  }
+
+  function exportBoard() {
+    const text = boardToText();
+    el.importBox.value = text;
+    navigator.clipboard?.writeText(text).catch(() => {});
+    log(`已匯出盤面文字${navigator.clipboard ? '，並嘗試複製到剪貼簿' : ''}：\n${text}`);
+  }
+
+  function importBoard() {
+    const parsed = parseBoardText(el.importBox.value);
+    state.board = parsed;
+    state.moveCount = 0;
+    resetAnalysisFlags();
+    updateUI();
+    log('已從文字匯入盤面');
+  }
+
+  function loadExample() {
+    el.dimension.value = '3';
+    el.size.value = '3';
+    el.modulus.value = '2';
+    el.targetValue.value = '0';
+    createNewGame();
+    const sample = `L0\n100\n101\n100\nL1\n010\n010\n100\nL2\n011\n111\n100`;
+    el.importBox.value = sample;
+    importBoard();
+    log('已載入你先前提供的 3D 範例');
+  }
+
+  document.getElementById('newGameBtn').onclick = () => { try { createNewGame(); } catch (e) { log(`建立失敗：${e.message}`); } };
+  document.getElementById('randomSolvableBtn').onclick = () => { try { syncInputsToState(); shuffleSolvableBoard(); } catch (e) { log(`操作失敗：${e.message}`); } };
+  document.getElementById('randomAnyBtn').onclick = () => { try { syncInputsToState(); randomAnyBoard(); } catch (e) { log(`操作失敗：${e.message}`); } };
+  document.getElementById('clearBtn').onclick = () => { try { syncInputsToState(); clearBoard(); } catch (e) { log(`操作失敗：${e.message}`); } };
+  document.getElementById('fillTargetBtn').onclick = () => { try { syncInputsToState(); fillTargetBoard(); } catch (e) { log(`操作失敗：${e.message}`); } };
+  document.getElementById('solveBtn').onclick = () => { try { syncInputsToState(); solveCurrentBoard(); } catch (e) { log(`求解失敗：${e.message}`); } };
+  document.getElementById('applyBtn').onclick = () => { try { syncInputsToState(); applyLastSolution(); } catch (e) { log(`套用失敗：${e.message}`); } };
+  document.getElementById('hintBtn').onclick = () => { try { syncInputsToState(); applyOneHint(); } catch (e) { log(`提示失敗：${e.message}`); } };
+  document.getElementById('firstLayerBtn').onclick = () => { try { syncInputsToState(); quickFirstLayer(); } catch (e) { log(`首層求解失敗：${e.message}`); } };
+  document.getElementById('fullCheckBtn').onclick = () => { try { syncInputsToState(); checkFullSolvability(); } catch (e) { log(`檢查失敗：${e.message}`); } };
+  document.getElementById('densityBtn').onclick = () => { try { syncInputsToState(); computeDensity(); } catch (e) { log(`密度計算失敗：${e.message}`); } };
+  document.getElementById('analyzeBtn').onclick = () => { try { syncInputsToState(); analyzeBoard(); } catch (e) { log(`分析失敗：${e.message}`); } };
+  document.getElementById('exportBtn').onclick = () => { try { exportBoard(); } catch (e) { log(`匯出失敗：${e.message}`); } };
+  document.getElementById('importBtn').onclick = () => { try { syncInputsToState(); importBoard(); } catch (e) { log(`匯入失敗：${e.message}`); } };
+  document.getElementById('loadExampleBtn').onclick = () => { try { loadExample(); } catch (e) { log(`載入範例失敗：${e.message}`); } };
+
+  createNewGame();
+})();
+</script>
+</body>
+</html>
